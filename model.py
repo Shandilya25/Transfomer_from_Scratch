@@ -68,8 +68,70 @@ class ff_nn(nn.Module):
         #inp: batch x seq_len x embedding_dim -> batch_seq x len x output_dim -> batch x seq_len x embedding_dim
         return self.linear2(self.dropout(torch.relu(self.linear1(x))))
 
+def MultiHeadAttention(nn.Module):
+    def __init__(self,embedding_dim,head,dropout):
+        super().__init__()
+        self.embedding_dim=embedding_dim
+        self.heads=head
+        self.dropout=dropout
+        
+        assert self.embedding_dim%self.heads==0,"Cannot divide the vector into given number of heads"
+        
+        self.embedding_div=self.embedding_dim/self.heads
+        self.w_k=nn.Linear(self.embedding_dim,self.embedding_dim)
+        self.w_q=nn.Linear(self.embedding_dim,self.embedding_dim)
+        self.w_v=nn.Linear(self.embedding_dim,self.embedding_dim)
+        
+        self.final_w=nn.Linear(self.embedding_dim,self.embedding_dim)
+        self.dropout=nn.Dropout(dropout)
+    @staticmethod
+    def find_attention(query,key,value,mask,dropout):
+        
+        d_k=query.shape[-1]
+        attention_scores=(query @ key.transpose(-2,-1))/math.sqrt(d_k)
+        
+        if mask:
+            attention_scores=attention_scores.masked_fill_(mask==0,-1e9)
+            
+        if dropout:
+            attention_scores=dropout(attention_scores)
+        return (attention_scores @ value),attention_scores
+
+            
         
         
+    def forward(self,q,k,v,mask):
+        query=self.w_q(q) #-->Dimensions are(batch,Seq_len,embedding_dim) Same for both output and input
+        key=self.w_k(k)   #-->Dimensions are(batch,Seq_len,embedding_dim)
+        value=self.w_k(v) #-->Dimensions are(batch,Seq_len,embedding_dim)
+        
+        
+        #Here the creation of these vectors are important because of the way we 
+        # are converting or reshaping the given q,k,v vectors so that each vector into
+        # a head of MH properly aligns with the inpput requirements and especially the usage 
+        # of q.view(dims).transpose
+        
+        query=query.view(query.shape[0],query.shape[1],self.heads,self.embedding_div).transpose(1,2)
+        key=key.view(key.shape[0],key.shape[1],self.heads,self.embedding_div).transpose(1,2)
+        value=value.view(value.shape[0],value.shape[1],self.heads,self.embedding_div).transpose(1,2)
+        
+        x=MultiHeadAttention.find_attention(query,key,value,mask,self.dropout)
+        # x=x.transpose(1,2)
+        # x=x.view(x.shape[0],x.shape[1],self.head*self.embedding_div)
+        
+        ##The above method is wrong because operations like transpose,permute makes the 
+        ## memory non contiguous because the strides are not looked-over so before making a 
+        #  .view() method u have to use .contiguous methods
+        # transpose() / permute(): Do not copy memory. They simply swap stride numbers. That is what causes non-contiguity.
+        
+        x=x.transpose(1,2).contiguous().view(x.dim[0],-1,self.heads*self.embedding_div)
+        
+        return self.w_o(x)
+
+
+class ResidualConnection(nn.Module):
+    def __init__(self):
+        super().__init__()
         
 
         
