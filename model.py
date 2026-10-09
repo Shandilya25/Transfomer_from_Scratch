@@ -130,11 +130,19 @@ def MultiHeadAttention(nn.Module):
 
 
 class ResidualConnection(nn.Module):
-    def __init__(self):
-        super().__init__()
+    def __init__(self,dropout):
+        super().__init__() 
+        self.dropout=nn.Dropout(dropout)
+        self.norm=LayerNormalization()
+        
+    def forward(self,x,prev_layer):
+        return x+self.dropout(prev_layer(self.norm(x)))
         
 
         
+class Encoder(nn.Module):
+    def __init__(self,multi_head,norm,residual_connection,mlp):
+        super().__init__()
         
         
         
