@@ -180,6 +180,30 @@ class Decoder(nn.Module):
         
         return x 
 
+
+class FullDecoder(nn.Module);
+    def __init__(self,layers):
+        super().__init__()
+        self.layers=layers
+        self.norm=LayerNormalization()
+    
+    def forward(self,src,encoder_output,src_mask,tgt_mask):
+        for layer in self.layers:
+            x=layer(x,encoder_output,src_mask,tgt_mask)
+        return x
+
+class FinalLLayer(nn.Module):
+    def __init__(self,decoder_output,output_dim):
+        super().__init__()
+        self.llayer=nn.Linear(decoder_output,output_dim)
+        
+    def forward(self,x):
+        return torch.log_softmax(self.llayer(x,dim=-1))
+    
+
+    
+            
+
         
         
         
