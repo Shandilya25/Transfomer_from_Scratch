@@ -68,7 +68,7 @@ class ff_nn(nn.Module):
         #inp: batch x seq_len x embedding_dim -> batch_seq x len x output_dim -> batch x seq_len x embedding_dim
         return self.linear2(self.dropout(torch.relu(self.linear1(x))))
 
-def MultiHeadAttention(nn.Module):
+class MultiHeadAttention(nn.Module):
     def __init__(self,embedding_dim,head,dropout):
         super().__init__()
         self.embedding_dim=embedding_dim
@@ -103,7 +103,7 @@ def MultiHeadAttention(nn.Module):
     def forward(self,q,k,v,mask):
         query=self.w_q(q) #-->Dimensions are(batch,Seq_len,embedding_dim) Same for both output and input
         key=self.w_k(k)   #-->Dimensions are(batch,Seq_len,embedding_dim)
-        value=self.w_k(v) #-->Dimensions are(batch,Seq_len,embedding_dim)
+        value=self.w_v(v) #-->Dimensions are(batch,Seq_len,embedding_dim)
         
         
         #Here the creation of these vectors are important because of the way we 
@@ -141,11 +141,45 @@ class ResidualConnection(nn.Module):
 
         
 class Encoder(nn.Module):
-    def __init__(self,multi_head,norm,residual_connection,mlp):
+    def __init__(self,multi_head,FF,dropout):
         super().__init__()
+        self.attention_block=multi_head
+        self.feed_forward_block=FF
+        self.residual_connection=nn.ModuleList([ResidualConnection(dropout) for _ in range(2)])
+        
+    def forward(self,src,src_mask):
+        x=self.residual_connection[0](x,lambda x:self.attention_block(x,x,x,src_mask))
+        x=self.residual_connection[1](x,self.feed_forward)
+        return x
+    
+class FullEncoder(nn.Module):
+    def __init__(self,layers):
+        super().__init__()
+        self.layers=layers
+        self.norm=LayerNormalization()
+        
+    def forward(self,x,mask):
+        for layer in self.layers:
+            x=layer(x,mask)
+        return self.norm(x)
+    
         
         
+class Decoder(nn.Module):
+    def __init__(self,multi_head,cross_attention,ff):
+        super().__init__()
+        self.mh_attention=multi_head
+        self.cross_attention=cross_attention
+        self.ff_block=ff
+        self.residual_connection=nn.Module([ResidualConnection(dropout) for _ in range(3)])
         
+    def forward(self,x,encoder_output,src_mask,tgt_mask):
+        x=self.residual_connection[0](x,lambda x:self.attention(x,x,x,tgt_mask))
+        x=self.residual_connection[1](x,lambda x:self.attention(x,encoder_output,encoder_output,src_mask))
+        x=self.residual_connection[2](x,self.ff_block)
+        
+        return x 
+
         
         
         
