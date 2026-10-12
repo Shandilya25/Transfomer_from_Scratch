@@ -171,7 +171,7 @@ class Decoder(nn.Module):
         self.mh_attention=multi_head
         self.cross_attention=cross_attention
         self.ff_block=ff
-        self.residual_connection=nn.Module([ResidualConnection(dropout) for _ in range(3)])
+        self.residual_connection=nn.ModuleList([ResidualConnection(dropout) for _ in range(3)])
         
     def forward(self,x,encoder_output,src_mask,tgt_mask):
         x=self.residual_connection[0](x,lambda x:self.attention(x,x,x,tgt_mask))
@@ -202,8 +202,71 @@ class FinalLLayer(nn.Module):
     
 
     
+class Transformer(nn.Module):
+    def __init__(self,src_embedding,tgt_embedding,encoder,decoder,src_posn,tgt_posn,llayer):
+        self.src_embedding=src_embedding
+        self.tgt_embedding=tgt_embedding
+        self.encoder=encoder 
+        self.decoder=decoder
+        self.src_posn=src_posn
+        self.tgt_posn=tgt_posn
+        self.llayer=llayer
+    
+    def encoder(self,src,src_mask):
+        src=self.src_embedding(src)
+        src=self.src_posn(src)
+        return self.encoder(src)
+    def decoder(self,encoder_output,src_mask,tgt,tgt_mask):
+        tgt=self.tgt_embedding(tgt)
+        tgt=self.decoder(tgt)
+        
+        
+    def llayer(self,x):
+        return self.llayer(x)
+    
+def build_transformer(src_vocab,tgt_vocab,src_seq_len,tgt_seq_len,embedding_size=512,blocks=6,heads=8,dropout=0.1,hidden_neurons=2048):
+    
+        src_embedding=InputEmbedding(embedding_size,src_vocab)
+        tgt_embedding=InputEmbedding(embedding_size,tgt_vocab)
+        
+        src_posn=PositionalEncoding(embedding_size,src_seq_len,dropout)
+        tgt_posn=PositionalEncoding(embedding_size,tgt_seq_len,dropout)
+        
+        encoder_blocks=[]
+        for i in range(blocks):
+            encoder_self_attention_blocks=MultiHeadAttention(embedding_size,heads,dropout)
+            feed_forward=ff_nn(embedding_size,hidden_neurons,dropout)
+            encoder_block=FullEncoder(encoder_self_attention_blocks,feed_forward,dropout)
+            encoder_blocks.append(encoder_block)
             
+        
+        decoder_blocks=[]
+        for i in range(blocks):
+            decoder_self_attention_blocks=MultiHeadAttention(embedding_size,heads,dropout)
+            decoder_cross_attention_blocks=MultiHeadAttention(embedding_size,heads,dropout)
+            feed_forward=ff_nn(embedding_size,hidden_neurons,dropout)
+            decoder_block=FullDecoder(decoder_self_attention_blocks,decoder_cross_attention_blocks,feed_forward,dropout)
+            decoder_blocks.append(decoder_block)
+        
+        encoder=Encoder(nn.ModuleList(encoder_blocks))
+        decoder=Decoder(nn.ModuleList(decoder_blocks))
+        
+        last_linear=FinalLLayer(embedding_size,tgt_vocab)
+        
+        transformer=Transformer(encoder,decoder,src_embedding,tgt_embedding,src_posn,tgt_posn,last_linear)
+        
+        
+        for parameters in transformer.parameters():
+            nn.init.xavier_uniform_(parameters)
+        
+        return transformer
 
+        
+            
+            
+        
+        
+        
         
         
         
