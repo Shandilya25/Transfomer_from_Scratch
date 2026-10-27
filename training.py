@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.utils.data import Dataset,DataLoader,random_split
 
 from datasets import load_dataset
 from tokenizers import Tokenizer
@@ -8,12 +9,18 @@ from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
 
 from pathlib import Path
+from dataset import BilingualDataset,casual_mask
+from model import build_transformer
+
+def get_all_sentences(dataset,language):
+    for element in dataset:
+        yield element['translation'][language]
 
 def get_build_tokenizer(config,dataset,language):
     tokenizer_path=Path(config['tokenizer_file'].format(language))
     if not Path.exists(tokenizer_path):
         tokenizer=Tokenizer(WordLevel(unk_token='[UNK]'))
-        tokenizer.pre_trainer=Whitespace()
+        tokenizer.pre_trainer=Whitespace()#splitting by white space.
         trainer=WordLevelTrainer(special_tokens=["[UNK]","[PAD]","[SOS]","[EOS]"],min_frequency=2)
         tokenizer.train_from_iterator(get_all_sentences(dataset,language),trainer=trainer)
         tokenizer.save(str(tokenizer_path))
@@ -25,9 +32,8 @@ def get_dataset(config):
 
     ds_raw = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split='train')
 
-
-    tokenizer_src = get_or_build_tokenizer(config, ds_raw, config['lang_src'])
-    tokenizer_tgt = get_or_build_tokenizer(config, ds_raw, config['lang_tgt'])
+    tokenizer_src = get_build_tokenizer(config, ds_raw, config['lang_src'])
+    tokenizer_tgt = get_build_tokenizer(config, ds_raw, config['lang_tgt'])
 
     train_ds_size = int(0.9 * len(ds_raw))
     val_ds_size = len(ds_raw) - train_ds_size
@@ -55,3 +61,7 @@ def get_dataset(config):
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
         
     
+def get_model(config,src_vocab_leb,tgt_vocab_len):
+    model=build_transformer(src_vocab_len,tgt_vocab_len,config['seq_len'],config['seq_len'],config['embedding_size'])
+    return model
+
