@@ -11,6 +11,9 @@ from tokenizers.pre_tokenizers import Whitespace
 from pathlib import Path
 from dataset import BilingualDataset,casual_mask
 from model import build_transformer
+from config import get_configuration,get_weights_file_path
+from torch.utils.tensorboard import SummaryWriter
+import tqdm
 
 def get_all_sentences(dataset,language):
     for element in dataset:
@@ -61,7 +64,42 @@ def get_dataset(config):
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
         
     
-def get_model(config,src_vocab_leb,tgt_vocab_len):
+def get_model(config,src_vocab_len,tgt_vocab_len):
     model=build_transformer(src_vocab_len,tgt_vocab_len,config['seq_len'],config['seq_len'],config['embedding_size'])
     return model
 
+def train_model():
+    device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"USing device:{device}")
+    Path(config['model_folder']).mkdir(parents=True,exist_ok=True)
+    
+    train_dataloader,val_dataloader,src_tokenizer,tgt_tokenizer=get_dataset(config)
+    model=get_model(config,src_tokenizer.get_vocab_size(),tgt_tokenizer.get_vocab_size()).to(device)
+    
+    writer=SummaryWriter(config["experiment_name"])
+    
+    optimizer=torch.optim.Adam(model.parameters(),lr=config["lr"],eps=1e-9)
+    
+    zeroth_epoch=0
+    global_step=0
+    
+    if config["preload"]:
+        model_filename=get_weights_file_path(config,config['preload'])
+        print(f'Preloading model {model_filename}')
+        state=torch.load(model_filename)
+        initial_epoch=state['epoch']
+        optimizer.load_state_dictionary(state['optimizer_state_dict'])
+        global_step=state['global_step']
+        
+    loss_function=nn.CrossEntropyLoss(ignore_index=src_tokenizer.token_to_id('[PAD]'),label_smoothing=0.1).to(device)
+    
+    for epoch in range(zeroth_epoch,config['num_epochs']):
+        model.train()
+        batch_iterator=tqdm(train_dataloader)
+        for batch in batch_iterator:
+            
+            encoder_input=batch["encoder_input"].to(device)
+            decoder_input=batch["decoder_input"].to(device)
+            encoder_mask=batch["encoder_mask"].to(device)
+            decoder_mask=batch["decoder_mask"].to(device)
+                
