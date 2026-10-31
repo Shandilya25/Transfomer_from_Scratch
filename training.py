@@ -159,10 +159,10 @@ def train_model():
     loss_function=nn.CrossEntropyLoss(ignore_index=src_tokenizer.token_to_id('[PAD]'),label_smoothing=0.1).to(device)
     
     for epoch in range(zeroth_epoch,config['num_epochs']):
-        model.train()
+        
         batch_iterator=tqdm(train_dataloader)
         for batch in batch_iterator:
-            
+            model.train()
             encoder_input=batch["encoder_input"].to(device)
             decoder_input=batch["decoder_input"].to(device)
             encoder_mask=batch["encoder_mask"].to(device)

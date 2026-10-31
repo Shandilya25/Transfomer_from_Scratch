@@ -16,6 +16,7 @@ class InputEmbedding(nn.Module):
 class PositionalEncoding(nn.Module):
     def __init__(self,embedding_size:int,seq_len:int,dropout:float)->None:
         '''Seq_len is to get the max sentence size which can be used for furture purpose such as padding of sentence etc.'''
+        super().__init__()
         self.embedding_size=embedding_size
         self.seq_len=seq_len
         self.dropout=nn.Dropout(dropout)
@@ -24,19 +25,19 @@ class PositionalEncoding(nn.Module):
         # Imp:If it needs to move with the model (e.g., to GPU via .cuda()):
         #  Use PyTorch's register_buffer so it behaves correctly without being treated as a trainable parameter
         #and will be saved along with the state of the model
-        matrix=torch.zeros([self.embedding_dim,self.seq_len])
+        matrix=torch.zeros([self.seq_len,self.embedding_size])
         
         pos_vector=torch.arange(0,self.seq_len,dtype=torch.float).unsqueeze(1)
-        value_term=torch.exp(torch.arange(0,seq_len,2).float() * (-math.log(10000.0)/self.embedding_size))
-        pos_vector[:,0::2]=torch.sin(pos_vector*value_term)
-        pos_vector[:,1::2]=torch.cos(pos_vector*value_term)
+        value_term=torch.exp(torch.arange(0,self.embedding_size,2).float() * (-math.log(10000.0)/self.embedding_size))
+        matrix[:,0::2]=torch.sin(pos_vector*value_term)
+        matrix[:,1::2]=torch.cos(pos_vector*value_term)
         
-        pos_vector=pos_vector.unsqueeze(0)#(1,seq_len,embedding_dim)
+        matrix=matrix.unsqueeze(0)#(1,seq_len,embedding_dim)
         
-        self.register_buffer('position_encoding',pos_vector)
+        self.register_buffer('position_encoding',matrix)
         
     def forward(self,x):
-        x=x+(self.pos_vector[:,:x.shape[1],:]).requires_grad_(False)
+        x=x+(self.position_encoding[:,:x.shape[1],:]).requires_grad_(False)
         return self.dropout(x)
     
 
@@ -65,7 +66,7 @@ class ff_nn(nn.Module):
         self.linear2=nn.Linear(output_dim,input_dim)
     
     def forward(self,x):
-        #inp: batch x seq_len x embedding_dim -> batch_seq x len x output_dim -> batch x seq_len x embedding_dim
+        #inp: batch x seq_len x embedding_dim -> batch x seq_len x output_dim -> batch x seq_len x embedding_dim
         return self.linear2(self.dropout(torch.relu(self.linear1(x))))
 
 class MultiHeadAttention(nn.Module):
@@ -84,6 +85,7 @@ class MultiHeadAttention(nn.Module):
         
         self.final_w=nn.Linear(self.embedding_dim,self.embedding_dim)
         self.dropout=nn.Dropout(dropout)
+        
     @staticmethod
     def find_attention(query,key,value,mask,dropout):
         
@@ -115,7 +117,7 @@ class MultiHeadAttention(nn.Module):
         key=key.view(key.shape[0],key.shape[1],self.heads,self.embedding_div).transpose(1,2)
         value=value.view(value.shape[0],value.shape[1],self.heads,self.embedding_div).transpose(1,2)
         
-        x=MultiHeadAttention.find_attention(query,key,value,mask,self.dropout)
+        x,attn=MultiHeadAttention.find_attention(query,key,value,mask,self.dropout)
         # x=x.transpose(1,2)
         # x=x.view(x.shape[0],x.shape[1],self.head*self.embedding_div)
         
@@ -126,7 +128,7 @@ class MultiHeadAttention(nn.Module):
         
         x=x.transpose(1,2).contiguous().view(x.dim[0],-1,self.heads*self.embedding_div)
         
-        return self.w_o(x)
+        return self.final_w(x)
 
 
 class ResidualConnection(nn.Module):
