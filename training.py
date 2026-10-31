@@ -65,17 +65,39 @@ def get_dataset(config):
 
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
 
-def greedy_decoding():
+def greedy_decoding(model,source,source_mask,src_tokenizer,tgt_tokenizer,max_len,devices):
+    sos_ids=tgt_tokenizer.token_to_id('[SOS]')
+    eos_ids=src_tokenizer.token_to_ids('[EOS]')
+    
+    encoder_output=model.encode(source,source_mask)
+    decoder_input=torch.empty(1,1).fill(sos_ids).type_as(source).to(device)
 
-
+    while True:
+        if decoder_input.size(1)==max_len:
+            break
+    
+        decoder_mask=casual_mask(decoder_input.size(1)).type_as(source_mask).to(devices)
+        
+        out=model.decode(encoder_output,source_mask,decoder_input,decoder_mask)
+        
+        prob=model.project(out[:,-1])
+        
+        _,next_word=torch.max(prob,dim=1)
+        decoder_input=torch.cat([decoder_input,torch.empty(1,1).type_as(source).fill_(next_word.item()).to(devices)],dim=1)
+        
+        if next_word==eos_ids:
+            break
+        
+        return decoder_input.squeeze(0)
+        
 
 def run_validate(model,validation_dataset,src_tokenizer,tgt_tokenizer,max_len,device,msg,global_state,writer,num_examples=3):
     model.eval()
     cnt=0
     
     source_texts=[]
-    expected_text=[]
-    predicted_text=[]
+    expected_texts=[]
+    predicted_texts=[]
     
     control_window=80
     
@@ -83,11 +105,27 @@ def run_validate(model,validation_dataset,src_tokenizer,tgt_tokenizer,max_len,de
         for batch in validation_dataset:
             count+=1
             encoder_input=batch['encoder_input'].to(device)
-            decoder_input=batch['encoder_mask'].to(device)
+            encoder_mask=batch['encoder_mask'].to(device)
             
             assert encoder_input.size(0)==1, "Batch size should be 1 for validation"
             
+            model_out=greedy_decoding(model,encoder_input,encoder_mask,src_tokenizer,tgt_tokenizer,max_len,device)
             
+            source_text=batch['src_text'][0]
+            target_text=batch=['tgt_text'][0]
+            model_out_text=tgt_tokenizer.decode(model_out.detach().cpu().numpy())
+            
+            source_texts.append(source_text)
+            expected_texts.append(target_text)
+            predicted_texts.append(model_out_text)
+            
+            print_msg(f'SOURCE:{source_text}')
+            print_msg(f'TARGET:{target_text}')
+            print_msg(f'PREDICTED:{model_out_text}')
+            
+            if count==num_examples:
+                break
+                
 
 
 
