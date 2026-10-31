@@ -8,6 +8,8 @@ from tokenizers.models import WordLevel
 from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
 
+import warnings
+
 from pathlib import Path
 from dataset import BilingualDataset,casual_mask
 from model import build_transformer
@@ -62,8 +64,33 @@ def get_dataset(config):
     val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
 
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
-        
+
+def greedy_decoding():
+
+
+
+def run_validate(model,validation_dataset,src_tokenizer,tgt_tokenizer,max_len,device,msg,global_state,writer,num_examples=3):
+    model.eval()
+    cnt=0
     
+    source_texts=[]
+    expected_text=[]
+    predicted_text=[]
+    
+    control_window=80
+    
+    with torch.no_grad:
+        for batch in validation_dataset:
+            count+=1
+            encoder_input=batch['encoder_input'].to(device)
+            decoder_input=batch['encoder_mask'].to(device)
+            
+            assert encoder_input.size(0)==1, "Batch size should be 1 for validation"
+            
+            
+
+
+
 def get_model(config,src_vocab_len,tgt_vocab_len):
     model=build_transformer(src_vocab_len,tgt_vocab_len,config['seq_len'],config['seq_len'],config['embedding_size'])
     return model
@@ -102,4 +129,37 @@ def train_model():
             decoder_input=batch["decoder_input"].to(device)
             encoder_mask=batch["encoder_mask"].to(device)
             decoder_mask=batch["decoder_mask"].to(device)
+            
+            encoder_op=model.encode(encoder_input,encoder_mask)
+            decoder_op=model.decode(encoder_op,encoder_mask,decoder_mask,decoder_mask)
+            projected_op=model.project(decoder_op)
+            
+            
+            label=batch['label'].to(device)
+            
+            loss=loss_fn(projected_op.view(-1,tgt_tokenizer.get_vocab_size()),label.view(-1))
+            batch_iterator=set_postfix({f"loss":f"{loss.item():6.3f}"})
+            
+            writer.add_scale("train loss",loss.item(),global_step)
+            
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            
+            global_step==1
+            
+        model_filename=get_weights_file_path(config,f"{epoch:02d}")
+        torch.save({
+            'epoch':epoch,
+            'model_state_dict':model.state_dict(),
+            'optimizer_state_dict':optimizer.state_dict(),
+            'global_step':global_step
+        },model_filename)
+        
+if __name__=="__main__":
+    warnings.filterwarnings('ignore')
+    config=get_configuration()
+    train_model(config)
+    
+            
                 

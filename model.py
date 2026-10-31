@@ -181,7 +181,7 @@ class Decoder(nn.Module):
         return x 
 
 
-class FullDecoder(nn.Module);
+class FullDecoder(nn.Module):
     def __init__(self,layers):
         super().__init__()
         self.layers=layers
