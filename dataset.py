@@ -28,7 +28,7 @@ class BilingualDataset(Dataset):
         tgt_tokens=self.tgt_tokenizer.encode(tgt_text).ids
         
         src_padding_tokens=self.seq_len-len(src_tokens)-2 # to make it up for sos,eos
-        tgt_padding_tokens=self.seq_len-len(tgt_tokens)-1 # we dont add sos token to decoder
+        tgt_padding_tokens=self.seq_len-len(tgt_tokens)-1 # we dont add eos token to decoder
         
         if src_padding_tokens<0 or tgt_padding_tokens<0:
             raise ValueError('Sentence is long')
@@ -39,8 +39,8 @@ class BilingualDataset(Dataset):
                 torch.tensor(src_tokens,dtype=torch.int64),
                 self.eos_token,
                 torch.tensor([self.pad_token]*src_padding_tokens,dtype=torch.int64)
-                
-            ]
+            ],
+            dim=0,
         )
         
         decoder_input=torch.cat(
