@@ -43,12 +43,12 @@ class PositionalEncoding(nn.Module):
 
 class LayerNormalization(nn.Module):
     
-    def __init__(self,eps):
+    def __init__(self,eps,features):
         #eps is added to standard_dev under root==(root((sigma)^2+eps))
         super().__init__()
         self.eps=eps    
-        self.gamma=nn.Parameter(torch.ones(1))
-        self.beta=nn.Parameter(torch.zeros(1))   
+        self.gamma=nn.Parameter(torch.ones(features))
+        self.beta=nn.Parameter(torch.zeros(features ))   
     
     def forward(self,x):
         mean=x.mean(dim=-1,keepdim=True)
@@ -62,7 +62,7 @@ class ff_nn(nn.Module):
         self.input_dim=input_dim
         self.output_dim=output_dim
         self.linear1=nn.Linear(input_dim,output_dim)
-        self.dropout=nn.dropout(dropout)
+        self.dropout=nn.Dropout(dropout)
         self.linear2=nn.Linear(output_dim,input_dim)
     
     def forward(self,x):
@@ -74,7 +74,6 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         self.embedding_dim=embedding_dim
         self.heads=head
-        self.dropout=dropout
         
         assert self.embedding_dim%self.heads==0,"Cannot divide the vector into given number of heads"
         
